@@ -38,9 +38,6 @@ async def project(ctx):
     pass
 
 
-
-
-
 if __name__ == '__main__':
     print(f'Let me join: {os.environ.get("JOIN_LINK")}')
     client.run(os.environ.get("TOKEN"))
