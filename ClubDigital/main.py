@@ -9,8 +9,28 @@ from dotenvy import load_env, read_file
 import pathlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from loguru import logger
 
 import models
+
+
+class InterceptHandler(logging.Handler):
+    def emit(self, record):
+        # Get corresponding Loguru level if it exists.
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+
+        # Find caller from where originated the logged message.
+        frame, depth = sys._getframe(6), 6
+        while frame and frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+
+logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
 
 
 load_env(read_file(pathlib.Path("../.env")))
@@ -27,13 +47,13 @@ models.base.setup(engine)
 
 @client.event
 async def on_ready():
-    print(f'Logged in as: {client.user}')
-    print('Joined to:')
+    logging.info(f'Logged in as: {client.user}')
+    logging.info('Joined to:')
     with Session(engine) as session:
         for guild in client.guilds:
-            print(f'    {guild.name} - {guild.id}')
+            logging.info(f'    {guild.name} - {guild.id}')
             for user in guild.members:
-                print(user.name)
+                logging.info(f'        {user.name}')
                 instance = session.query(models.user.User).filter_by(username=user.name).first()
                 if not instance:
                     session.add(models.user.User(user.name))
@@ -46,12 +66,12 @@ async def project(ctx):
 
 
 if __name__ == '__main__':
-    print("Versionsinfo:")
-    print(f'    Python {sys.version} auf {sys.platform}')
-    print(f'    Pycord {discord.__version__}')
-    print(f'    SQLAlchemy {sqlalchemy.__version__}')
-    print(f'    dotenvy {dotenvy.__version__}')
-    print(f'Let me join: {os.environ.get("JOIN_LINK")}')
+    logging.info("Versionsinfo:")
+    logging.info(f'    Python {sys.version} auf {sys.platform}')
+    logging.info(f'    Pycord {discord.__version__}')
+    logging.info(f'    SQLAlchemy {sqlalchemy.__version__}')
+    logging.info(f'    dotenvy {dotenvy.__version__}')
+    logging.info(f'Let me join: {os.environ.get("JOIN_LINK")}')
     client.run(os.environ.get("TOKEN"))
 
 
