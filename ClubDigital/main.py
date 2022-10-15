@@ -32,8 +32,8 @@ class InterceptHandler(logging.Handler):
 
         logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
-logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
 
+logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
 
 load_env(read_file(pathlib.Path("../.env")))
 logging.basicConfig(level=logging.DEBUG)
@@ -56,11 +56,21 @@ async def on_ready():
             logging.info(f'    {guild.name} - {guild.id}')
             for user in guild.members:
                 # logging.info(f'        {user.name}')
+                # print(user.__dir__())
                 instance = session.query(models.user.User).filter_by(username=user.name).first()
                 if not instance:
-                    logger.info(f'Enlisted {user.name} into user database.')
-                    session.add(models.user.User(user.name))
+                    logger.info(f'Enlisted {user.name}#{user.id} into user database.')
+                    session.add(models.user.User(user.name, user.id))
             session.commit()
+
+
+@client.event
+async def on_disconnect():
+    logger.error('Bot disconnected unexpectedly.')
+
+
+# @client.event
+# async def
 
 
 @client.command()
@@ -78,5 +88,4 @@ if __name__ == '__main__':
     try:
         client.run(os.environ.get("TOKEN"))
     except aiohttp.client_exceptions.ClientConnectionError as e:
-        logger.error(f'Cound not connect to {e.message}')
-
+        logger.error(f'Cound not connect to {e.host}:{e.port} {e.ssl} - {e.os_error}')
