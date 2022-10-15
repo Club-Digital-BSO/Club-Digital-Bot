@@ -14,6 +14,7 @@ load_env(read_file(pathlib.Path("../.env")))
 
 intents = discord.Intents.default()
 intents.members = True
+intents.message_content = True
 
 client = commands.Bot(command_prefix="!", intents=intents)
 engine = create_engine('sqlite:///../db.sqlite3')
@@ -29,13 +30,13 @@ async def on_ready():
             print(f'    {guild.name} - {guild.id}')
             for user in guild.members:
                 print(user.name)
-                session.add(models.user.User(user.name))
-            session.commit()
+                # session.add(models.user.User(user.name))
+            # session.commit()
 
 
 @client.command()
 async def project(ctx):
-    pass
+    await ctx.send("Pong")
 
 
 if __name__ == '__main__':
