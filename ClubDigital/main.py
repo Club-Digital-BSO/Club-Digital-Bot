@@ -1,5 +1,7 @@
 import os
 import sys
+
+import aiohttp.client_exceptions
 import discord
 import logging
 import dotenvy
@@ -53,9 +55,10 @@ async def on_ready():
         for guild in client.guilds:
             logging.info(f'    {guild.name} - {guild.id}')
             for user in guild.members:
-                logging.info(f'        {user.name}')
+                # logging.info(f'        {user.name}')
                 instance = session.query(models.user.User).filter_by(username=user.name).first()
                 if not instance:
+                    logger.info(f'Enlisted {user.name} into user database.')
                     session.add(models.user.User(user.name))
             session.commit()
 
@@ -72,6 +75,8 @@ if __name__ == '__main__':
     logging.info(f'    SQLAlchemy {sqlalchemy.__version__}')
     logging.info(f'    dotenvy {dotenvy.__version__}')
     logging.info(f'Let me join: {os.environ.get("JOIN_LINK")}')
-    client.run(os.environ.get("TOKEN"))
-
+    try:
+        client.run(os.environ.get("TOKEN"))
+    except aiohttp.client_exceptions.ClientConnectionError as e:
+        logger.error(f'Cound not connect to {e.message}')
 
