@@ -14,6 +14,7 @@ Dieses Projekt wird von Schülern entwickelt.
  - pycord
  - dotenvy
  - SQLAlchemy
+ - loguru
 
 ## Installation
 
