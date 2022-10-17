@@ -96,38 +96,41 @@ async def project(ctx):
 @project.command(name="list")
 async def list_projects(ctx):
     """Listet alle pekannten Projekte auf."""
-    with Session(engine) as session:
-        data = session.query(models.project.Project).all()
-        message = "**Projects**\n"
-        for project in data:
-            message += f'*{project.name}:* {project.description}\n'
-        await ctx.send(message)
+    with ctx.typing():
+        with Session(engine) as session:
+            data = session.query(models.project.Project).all()
+            message = "**Projects**\n"
+            for project in data:
+                message += f'*{project.name}:* {project.description}\n'
+            await ctx.send(message)
 
 
 @project.command(name="add")
 async def add_project(ctx, name: str, description: str):
     """Legt ein neues Projekt an."""
-    with Session(engine) as session:
-        instance = session.query(models.project.Project).filter_by(name=name).first()
-        if not instance:
-            session.add(models.project.Project(name, description))
-            session.commit()
-            await ctx.send(f'Added a project called "{name}".')
-        else:
-            await ctx.send(f'This Project already exists!')
+    with ctx.typing():
+        with Session(engine) as session:
+            instance = session.query(models.project.Project).filter_by(name=name).first()
+            if not instance:
+                session.add(models.project.Project(name, description))
+                session.commit()
+                await ctx.send(f'Added a project called "{name}".')
+            else:
+                await ctx.send(f'This Project already exists!')
 
 
 @project.command(name="rm")
 async def delete_project(ctx, name: str):
     """Entfernt Projekte."""
-    with Session(engine) as session:
-        instance = session.query(models.Project).filter_by(name=name).first()
-        if instance:
-            session.delete(instance)
-            session.commit()
-            await ctx.send(f'Projekt "{instance.name}" wurde entfernt.')
-        else:
-            await ctx.send(f'Projekt existiert nicht.')
+    with ctx.typing():
+        with Session(engine) as session:
+            instance = session.query(models.Project).filter_by(name=name).first()
+            if instance:
+                session.delete(instance)
+                session.commit()
+                await ctx.send(f'Projekt "{instance.name}" wurde entfernt.')
+            else:
+                await ctx.send(f'Projekt existiert nicht.')
 
 
 @project.command(name="join")
@@ -139,35 +142,37 @@ async def join_project(ctx, prj: str, *users: typing.Optional[discord.Member]):
     if len(users) == 0:
         users.append(ctx.message.author)
 
-    with Session(engine) as session:
-        for user in users:
-            usr = session.query(models.User).filter_by(dc_id=user.id).first()
-            proj = session.query(models.Project).filter_by(name=prj).first()
-            if all([usr, proj]):
-                if usr.project_id is None:
-                    message += f'Benutzer {usr.username} zu {prj} hinzugefügt.\n'
-                else:
-                    old = session.query(models.Project).filter_by(id=usr.project_id).first()
-                    message += f'Benutzer {usr.username} wurde von {old.name} zu {proj.name} verschoben.\n'
-                usr.project_id = proj.id
-        session.commit()
-        await ctx.send(message)
+    with ctx.typing():
+        with Session(engine) as session:
+            for user in users:
+                usr = session.query(models.User).filter_by(dc_id=user.id).first()
+                proj = session.query(models.Project).filter_by(name=prj).first()
+                if all([usr, proj]):
+                    if usr.project_id is None:
+                        message += f'Benutzer {usr.username} zu {prj} hinzugefügt.\n'
+                    else:
+                        old = session.query(models.Project).filter_by(id=usr.project_id).first()
+                        message += f'Benutzer {usr.username} wurde von {old.name} zu {proj.name} verschoben.\n'
+                    usr.project_id = proj.id
+            session.commit()
+            await ctx.send(message)
 
 
 @project.command(name="leave")
 async def leave_project(ctx, *users: typing.Optional[discord.Member]):
     """Entfernt Benutzer aus einem Projekt."""
-    with Session(engine) as session:
-        message = ""
-        for user in users:
-            usr = session.query(models.User).filter_by(dc_id=user.id).first()
-            if usr:
-                logger.debug(usr)
-                prj = session.query(models.Project).filter_by(id=usr.project_id).first()
-                message += f'Benutzer {usr.username} wurde aus {prj.name} entfernt.\n'
-                usr.project_id = None
-        session.commit()
-        await ctx.send(message)
+    with ctx.typing():
+        with Session(engine) as session:
+            message = ""
+            for user in users:
+                usr = session.query(models.User).filter_by(dc_id=user.id).first()
+                if usr:
+                    logger.debug(usr)
+                    prj = session.query(models.Project).filter_by(id=usr.project_id).first()
+                    message += f'Benutzer {usr.username} wurde aus {prj.name} entfernt.\n'
+                    usr.project_id = None
+            session.commit()
+            await ctx.send(message)
 
 
 @project.command(name="info")
