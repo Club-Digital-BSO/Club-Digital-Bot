@@ -8,7 +8,7 @@ class Project(Base):
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     name = Column(String, nullable=False, unique=True)
     description = Column(String, nullable=True)
-    users = Column(Integer, ForeignKey('users.id'))
+    users = relationship("User")
 
     def __init__(self, name: str, description: str):
         super(Project, self).__init__()
