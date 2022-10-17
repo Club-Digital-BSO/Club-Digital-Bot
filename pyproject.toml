@@ -12,6 +12,7 @@ py-cord = "^2.2.2"
 dotenvy = "^0.2.0"
 SQLAlchemy = "^1.4.41"
 loguru = "^0.6.0"
+alembic = "^1.8.1"
 
 
 [build-system]
