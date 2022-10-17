@@ -8,6 +8,7 @@ Dieses Projekt wird von Schülern entwickelt.
  - Python 3.10
  - poetry
  - Code Editor (empfohlen: Pycharm community)
+ - Alembic
 
 ## Bibliotheken
 
