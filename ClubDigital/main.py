@@ -116,6 +116,20 @@ async def add_project(ctx, name: str, description: str):
             await ctx.send(f'This Project already exists!')
 
 
+@project.command(name="rm")
+async def delete_project(ctx, name: str):
+    """Entfernt Projekte."""
+    with Session(engine) as session:
+        instance = session.query(models.Project).filter_by(name=name).first()
+        if instance:
+            session.delete(instance)
+            session.commit()
+            await ctx.send(f'Projekt "{instance.name}" wurde entfernt.')
+        else:
+            await ctx.send(f'Projekt existiert nicht.')
+
+
+
 if __name__ == '__main__':
     logging.info("Versionsinfo:")
     logging.info(f'    Python {sys.version} auf {sys.platform}')
