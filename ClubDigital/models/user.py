@@ -10,8 +10,9 @@ class User(Base):
     id = Column(Integer(), autoincrement=True, unique=True, nullable=True, primary_key=True)
     username = Column(String(), unique=True)
     project_id = Column(Integer, ForeignKey("projects.id"))
-    # project = relationship("Project", back_populates="users")
     dc_id = Column(String(), unique=True)
+    birth_year = Column(Integer)
+    class_name = Column(String)
 
     def __init__(self, username, id):
         self.username = username
