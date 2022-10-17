@@ -57,6 +57,8 @@ async def on_ready():
             for user in guild.members:
                 # logging.info(f'        {user.name}')
                 # print(user.__dir__())
+                if user.name == 'Club-Digital':
+                    continue
                 instance = session.query(models.user.User).filter_by(username=user.name).first()
                 if not instance:
                     logger.info(f'Enlisted {user.name}#{user.id} into user database.')
@@ -69,13 +71,49 @@ async def on_disconnect():
     logger.error('Bot disconnected unexpectedly.')
 
 
-# @client.event
-# async def
+@client.event
+async def on_member_joined(member):
+    with Session(engine) as session:
+        instance = session.query(models.user.User).filter_by(username=member.name).first()
+        if not instance:
+            logger.info(f'Enlisted {member.name}#{member.id} into user database.')
+            session.add(models.user.User(member.name, member.id))
+        session.commit()
 
 
-@client.command()
+@client.event
+async def on_resumed():
+    logger.info('Bot resumed normal operation')
+
+
+@client.group()
 async def project(ctx):
-    await ctx.send("Pong")
+    """Verwaltet die Projekte der AG."""
+    pass
+
+
+@project.command(name="list")
+async def list_projects(ctx):
+    """Listet alle pekannten Projekte auf."""
+    with Session(engine) as session:
+        data = session.query(models.project.Project).all()
+        message = "**Projects**\n"
+        for project in data:
+            message += f'*{project.name}:* {project.description}\n'
+        await ctx.send(message)
+
+
+@project.command(name="add")
+async def add_project(ctx, name: str, description: str):
+    """Legt ein neues Projekt an."""
+    with Session(engine) as session:
+        instance = session.query(models.project.Project).filter_by(name=name).first()
+        if not instance:
+            session.add(models.project.Project(name, description))
+            session.commit()
+            await ctx.send(f'Added a project called "{name}".')
+        else:
+            await ctx.send(f'This Project already exists!')
 
 
 if __name__ == '__main__':
@@ -89,3 +127,5 @@ if __name__ == '__main__':
         client.run(os.environ.get("TOKEN"))
     except aiohttp.client_exceptions.ClientConnectionError as e:
         logger.error(f'Cound not connect to {e.host}:{e.port} {e.ssl} - {e.os_error}')
+    except aiohttp.client_exceptions.ClientConnectorError:
+        pass
