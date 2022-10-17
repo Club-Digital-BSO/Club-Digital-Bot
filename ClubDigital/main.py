@@ -135,6 +135,10 @@ async def join_project(ctx, prj: str, *users: typing.Optional[discord.Member]):
     """Fügt einen User einem Projekt hinzu."""
     logger.debug(users)
     message = ""
+    users = list(users)
+    if len(users) == 0:
+        users.append(ctx.message.author)
+
     with Session(engine) as session:
         for user in users:
             usr = session.query(models.User).filter_by(dc_id=user.id).first()
