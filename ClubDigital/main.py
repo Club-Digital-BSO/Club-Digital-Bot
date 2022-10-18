@@ -1,3 +1,4 @@
+import colorsys
 import os
 import sys
 import typing
@@ -85,6 +86,19 @@ async def on_member_joined(member):
 @client.event
 async def on_resumed():
     logger.info('Bot resumed normal operation')
+
+
+@client.command()
+async def ping(ctx):
+    ping = round(ctx.bot.latency * 1000, 1)
+    ping_int = int(ping)
+    hue = max(0, 120 - (ping_int // 5))
+    logger.debug(str(hue))
+    logger.debug("".join([f'{hex(int(i * 255))[2:]:02}' for i in colorsys.hsv_to_rgb(hue / 360, 1, 1)]))
+    color = int("".join([f'{hex(int(i * 255))[2:]:02}' for i in colorsys.hsv_to_rgb(hue / 360, 1, 1)]), 16)
+    message = discord.Embed(title='Pong', color=color)
+    message.add_field(name="Latenz", value=f'{ping} ms')
+    await ctx.send(embed=message)
 
 
 @client.group()
