@@ -9,11 +9,17 @@ class Project(Base):
     name = Column(String, nullable=False, unique=True)
     description = Column(String, nullable=True)
     leader = Column(Integer)
-    repository = Column(String)
 
+    repository = relationship("Repo")
     users = relationship("User")
 
     def __init__(self, name: str, description: str):
         super(Project, self).__init__()
         self.name = name
         self.description = description
+
+
+class Repo(Base):
+    __tablename__ = "repos"
+    project = Column(ForeignKey("projects.id"))
+    link = Column(String, nullable=False)
