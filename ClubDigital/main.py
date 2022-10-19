@@ -8,7 +8,9 @@ import discord
 import logging
 import dotenvy
 import sqlalchemy
+import pandas
 from discord.ext import commands
+from discord.ext import tasks
 from dotenvy import load_env, read_file
 import pathlib
 from sqlalchemy import create_engine
@@ -48,6 +50,8 @@ client = commands.Bot(command_prefix="!", intents=intents)
 engine = create_engine('sqlite:///../db.sqlite3')
 models.base.setup(engine)
 
+ping_stats = []
+
 
 @client.event
 async def on_ready():
@@ -66,6 +70,8 @@ async def on_ready():
                     logger.info(f'Enlisted {user.name}#{user.id} into user database.')
                     session.add(models.user.User(user.name, user.id))
             session.commit()
+    logging.info("Started Ping collection")
+    collect_ping_metric.start()
 
 
 @client.event
@@ -88,17 +94,36 @@ async def on_resumed():
     logger.info('Bot resumed normal operation')
 
 
+@tasks.loop(seconds=43)
+async def collect_ping_metric():
+    global ping_stats
+    ping_stats.append(round(client.latency * 1000, 3))
+    while len(ping_stats) > 300:
+        ping_stats.pop(0)
+    # logger.debug(ping_stats)
+
+
 @client.command()
 async def ping(ctx):
+    global ping_stats
     ping = round(ctx.bot.latency * 1000, 1)
     ping_int = int(ping)
     hue = max(0, 120 - (ping_int // 5))
-    logger.debug(str(hue))
-    logger.debug("".join([f'{hex(int(i * 255))[2:]:02}' for i in colorsys.hsv_to_rgb(hue / 360, 1, 1)]))
     color = int("".join([f'{hex(int(i * 255))[2:]:02}' for i in colorsys.hsv_to_rgb(hue / 360, 1, 1)]), 16)
+    ts = pandas.Series(ping_stats, index=range(len(ping_stats)))
+    logger.debug(ts)
+    ts.cumsum()
+    plot = ts.plot()
+    fig = plot.get_figure()
+    fig.savefig("ping.png", dpi=100, transparent=False)
+    image = discord.File("ping.png", filename="ping.png")
     message = discord.Embed(title='Pong', color=color)
     message.add_field(name="Latenz", value=f'{ping} ms')
-    await ctx.send(embed=message)
+    message.add_field(name="Mittelwert", value=f'{round(ts.median(), 3)} ms')
+    message.set_image(url='attachment://ping.png')
+    # pathlib.Path("ping.png").unlink()
+    ts.drop(columns=[0])
+    await ctx.send(embed=message, file=image)
 
 
 @client.group()
