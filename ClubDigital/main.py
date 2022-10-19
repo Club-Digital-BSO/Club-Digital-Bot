@@ -82,10 +82,10 @@ async def on_disconnect():
 @client.event
 async def on_member_joined(member):
     with Session(engine) as session:
-        instance = session.query(models.user.User).filter_by(username=member.name).first()
+        instance = session.query(models.User).filter_by(username=member.name).first()
         if not instance:
             logger.info(f'Enlisted {member.name}#{member.id} into user database.')
-            session.add(models.user.User(member.name, member.id))
+            session.add(models.User(member.name, member.id))
         session.commit()
 
 
@@ -94,18 +94,17 @@ async def on_resumed():
     logger.info('Bot resumed normal operation')
 
 
-@tasks.loop(seconds=43)
+# update interval: 42 seconds
+@tasks.loop(seconds=42)
 async def collect_ping_metric():
     global ping_stats
     ping_stats.append(round(client.latency * 1000, 3))
-    while len(ping_stats) > 300:
+    while len(ping_stats) > 10:
         ping_stats.pop(0)
-    # logger.debug(ping_stats)
 
 
 @client.command()
 async def ping(ctx):
-    global ping_stats
     ping = round(ctx.bot.latency * 1000, 1)
     ping_int = int(ping)
     hue = max(0, 120 - (ping_int // 5))
@@ -113,17 +112,23 @@ async def ping(ctx):
     ts = pandas.Series(ping_stats, index=range(len(ping_stats)))
     logger.debug(ts)
     ts.cumsum()
+
     plot = ts.plot()
+
     fig = plot.get_figure()
     fig.savefig("ping.png", dpi=100, transparent=False)
+    fig.clf()
+
     image = discord.File("ping.png", filename="ping.png")
+
     message = discord.Embed(title='Pong', color=color)
     message.add_field(name="Latenz", value=f'{ping} ms')
     message.add_field(name="Mittelwert", value=f'{round(ts.median(), 3)} ms')
     message.set_image(url='attachment://ping.png')
-    # pathlib.Path("ping.png").unlink()
-    ts.drop(columns=[0])
+
     await ctx.send(embed=message, file=image)
+
+    pathlib.Path("ping.png").unlink()
 
 
 @client.group()
