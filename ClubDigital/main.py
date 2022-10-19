@@ -81,16 +81,6 @@ async def on_disconnect():
 
 
 @client.event
-async def on_member_joined(member):
-    with Session(engine) as session:
-        instance = session.query(models.User).filter_by(username=member.name).first()
-        if not instance:
-            logger.info(f'Enlisted {member.name}#{member.id} into user database.')
-            session.add(models.User(member.name, member.id))
-        session.commit()
-
-
-@client.event
 async def on_resumed():
     logger.info('Bot resumed normal operation')
 
@@ -105,6 +95,7 @@ async def collect_ping_metric():
 
 @client.command()
 async def ping(ctx):
+    """Zeigt die aktuelle Latenz des Bots zusammen mit ein paar verwandten Statistiken an."""
     ping = round(ctx.bot.latency * 1000, 1)
     ping_int = int(ping)
     hue = max(0, 120 - (ping_int // 5))
@@ -136,12 +127,12 @@ async def ping(ctx):
 
 
 if __name__ == '__main__':
-    logging.info("Versionsinfo:")
-    logging.info(f'    Python {sys.version} auf {sys.platform}')
-    logging.info(f'    Pycord {discord.__version__}')
-    logging.info(f'    SQLAlchemy {sqlalchemy.__version__}')
-    logging.info(f'    dotenvy {dotenvy.__version__}')
-    logging.info(f'Let me join: {os.environ.get("JOIN_LINK")}')
+    logger.info("Versionsinfo:")
+    logger.info(f'    Python {sys.version} auf {sys.platform}')
+    logger.info(f'    Pycord {discord.__version__}')
+    logger.info(f'    SQLAlchemy {sqlalchemy.__version__}')
+    logger.info(f'    dotenvy {dotenvy.__version__}')
+    logger.info(f'Let me join: {os.environ.get("JOIN_LINK")}')
     try:
         client.run(os.environ.get("TOKEN"))
     except aiohttp.client_exceptions.ClientConnectionError as e:
