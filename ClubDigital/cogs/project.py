@@ -1,6 +1,9 @@
+import logging
+import sys
+
 import discord
 import typing
-from discord.ext import commands, tasks
+from discord.ext import commands
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -8,11 +11,54 @@ from ClubDigital import models
 from loguru import logger
 
 
+class InterceptHandler(logging.Handler):
+    def emit(self, record):
+        # Get corresponding Loguru level if it exists.
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+
+        # Find caller from where originated the logged message.
+        frame, depth = sys._getframe(6), 6
+        while frame and frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+
+
+logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
+
+
 class Project(commands.Cog):
+    """
+    Alles, was mit Projekten und Schülern zu tun hat.
+    """
     def __init__(self, bot):
         self.bot = bot
-        engine = create_engine('sqlite:///../db.sqlite3')
-        self.session = Session(engine)
+        self.engine = create_engine('sqlite:///../db.sqlite3')
+        self.session = Session(self.engine)
+
+    @commands.Cog.listener()
+    async def on_member_joined(self, member):
+        instance = self.session.query(models.User).filter_by(username=member.name).first()
+        if not instance:
+            logger.info(f'Enlisted {member.name}#{member.id} into user database.')
+            self.session.add(models.User(member.name, member.id))
+        self.session.commit()
+
+    @commands.Cog.listener()
+    async def on_disconnect(self):
+        if self.session.is_active:
+            self.session.close()
+            logger.info("Closing the database connection for Project cog.")
+
+    @commands.Cog.listener()
+    async def on_connect(self):
+        if not self.session.is_active:
+            self.session = Session(self.engine)
+            logger.info("Opening a new database connection for Project cog.")
 
     @commands.group()
     async def project(self, ctx):
@@ -20,7 +66,7 @@ class Project(commands.Cog):
         pass
 
     @project.command(name="list")
-    async def list_projects(self, ctx):
+    async def list(self, ctx):
         """Listet alle bekannten Projekte auf."""
         with ctx.typing():
             data = self.session.query(models.Project).all()
@@ -30,7 +76,7 @@ class Project(commands.Cog):
             await ctx.send(message)
 
     @project.command(name="add")
-    async def add_project(self, ctx, name: str, description: str):
+    async def add(self, ctx, name: str, description: str):
         """Legt ein neues Projekt an."""
         with ctx.typing():
             instance = self.session.query(models.project.Project).filter_by(name=name).first()
@@ -42,7 +88,7 @@ class Project(commands.Cog):
                 await ctx.send(f'This Project already exists!')
 
     @project.command(name="rm")
-    async def delete_project(self, ctx, name: str):
+    async def delete(self, ctx, name: str):
         """Entfernt Projekte."""
         with ctx.typing():
             instance = self.session.query(models.Project).filter_by(name=name).first()
@@ -54,7 +100,7 @@ class Project(commands.Cog):
                 await ctx.send(f'Projekt existiert nicht.')
 
     @project.command(name="join")
-    async def join_project(self, ctx, prj: str, *users: typing.Optional[discord.Member]):
+    async def join(self, ctx, prj: str, *users: typing.Optional[discord.Member]):
         """Fügt einen User einem Projekt hinzu."""
         logger.debug(users)
         message = ""
@@ -77,7 +123,7 @@ class Project(commands.Cog):
             await ctx.send(message)
 
     @project.command(name="leave")
-    async def leave_project(self, ctx, *users: typing.Optional[discord.Member]):
+    async def leave(self, ctx, *users: typing.Optional[discord.Member]):
         """Entfernt Benutzer aus einem Projekt."""
         with ctx.typing():
             message = ""
@@ -92,7 +138,7 @@ class Project(commands.Cog):
             await ctx.send(message)
 
     @project.command(name="info")
-    async def info_project(self, ctx, proj: str):
+    async def info(self, ctx, proj: str):
         """Git Detailinformationen über ein spezielles Projekt."""
         prj = self.session.query(models.Project).filter_by(name=proj).first()
         message = f'**Projektname:** {prj.name}\n\n' \
