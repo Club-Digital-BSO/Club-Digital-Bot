@@ -9,6 +9,7 @@ class Project(Base):
     name = Column(String, nullable=False, unique=True)
     description = Column(String, nullable=True)
     leader = Column(Integer)
+    repository = Column(String)
 
     users = relationship("User")
 
