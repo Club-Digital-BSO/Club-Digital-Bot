@@ -47,6 +47,7 @@ intents.members = True
 intents.message_content = True
 
 client = commands.Bot(command_prefix="!", intents=intents)
+client.load_extension('cogs.project')
 engine = create_engine('sqlite:///../db.sqlite3')
 models.base.setup(engine)
 
@@ -97,7 +98,6 @@ async def on_resumed():
 # update interval: 42 seconds
 @tasks.loop(seconds=42)
 async def collect_ping_metric():
-    global ping_stats
     ping_stats.append(round(client.latency * 1000, 3))
     while len(ping_stats) > 10:
         ping_stats.pop(0)
@@ -109,126 +109,30 @@ async def ping(ctx):
     ping_int = int(ping)
     hue = max(0, 120 - (ping_int // 5))
     color = int("".join([f'{hex(int(i * 255))[2:]:02}' for i in colorsys.hsv_to_rgb(hue / 360, 1, 1)]), 16)
+
     ts = pandas.Series(ping_stats, index=range(len(ping_stats)))
-    logger.debug(ts)
-    ts.cumsum()
-
-    plot = ts.plot()
-
-    fig = plot.get_figure()
-    fig.savefig("ping.png", dpi=100, transparent=False)
-    fig.clf()
-
-    image = discord.File("ping.png", filename="ping.png")
 
     message = discord.Embed(title='Pong', color=color)
     message.add_field(name="Latenz", value=f'{ping} ms')
     message.add_field(name="Mittelwert", value=f'{round(ts.median(), 3)} ms')
-    message.set_image(url='attachment://ping.png')
 
-    await ctx.send(embed=message, file=image)
+    if len(ping_stats) > 1:
+        logger.debug(ts)
+        ts.cumsum()
 
-    pathlib.Path("ping.png").unlink()
+        plot = ts.plot()
 
+        fig = plot.get_figure()
+        fig.savefig("ping.png", dpi=100, transparent=False)
+        fig.clf()
 
-@client.group()
-async def project(ctx):
-    """Verwaltet die Projekte der AG."""
-    pass
+        image = discord.File("ping.png", filename="ping.png")
+        message.set_image(url='attachment://ping.png')
 
-
-@project.command(name="list")
-async def list_projects(ctx):
-    """Listet alle pekannten Projekte auf."""
-    with ctx.typing():
-        with Session(engine) as session:
-            data = session.query(models.project.Project).all()
-            message = "**Projects**\n"
-            for project in data:
-                message += f'*{project.name}:* {project.description}\n'
-            await ctx.send(message)
-
-
-@project.command(name="add")
-async def add_project(ctx, name: str, description: str):
-    """Legt ein neues Projekt an."""
-    with ctx.typing():
-        with Session(engine) as session:
-            instance = session.query(models.project.Project).filter_by(name=name).first()
-            if not instance:
-                session.add(models.project.Project(name, description))
-                session.commit()
-                await ctx.send(f'Added a project called "{name}".')
-            else:
-                await ctx.send(f'This Project already exists!')
-
-
-@project.command(name="rm")
-async def delete_project(ctx, name: str):
-    """Entfernt Projekte."""
-    with ctx.typing():
-        with Session(engine) as session:
-            instance = session.query(models.Project).filter_by(name=name).first()
-            if instance:
-                session.delete(instance)
-                session.commit()
-                await ctx.send(f'Projekt "{instance.name}" wurde entfernt.')
-            else:
-                await ctx.send(f'Projekt existiert nicht.')
-
-
-@project.command(name="join")
-async def join_project(ctx, prj: str, *users: typing.Optional[discord.Member]):
-    """Fügt einen User einem Projekt hinzu."""
-    logger.debug(users)
-    message = ""
-    users = list(users)
-    if len(users) == 0:
-        users.append(ctx.message.author)
-
-    with ctx.typing():
-        with Session(engine) as session:
-            for user in users:
-                usr = session.query(models.User).filter_by(dc_id=user.id).first()
-                proj = session.query(models.Project).filter_by(name=prj).first()
-                if all([usr, proj]):
-                    if usr.project_id is None:
-                        message += f'Benutzer {usr.username} zu {prj} hinzugefügt.\n'
-                    else:
-                        old = session.query(models.Project).filter_by(id=usr.project_id).first()
-                        message += f'Benutzer {usr.username} wurde von {old.name} zu {proj.name} verschoben.\n'
-                    usr.project_id = proj.id
-            session.commit()
-            await ctx.send(message)
-
-
-@project.command(name="leave")
-async def leave_project(ctx, *users: typing.Optional[discord.Member]):
-    """Entfernt Benutzer aus einem Projekt."""
-    with ctx.typing():
-        with Session(engine) as session:
-            message = ""
-            for user in users:
-                usr = session.query(models.User).filter_by(dc_id=user.id).first()
-                if usr:
-                    logger.debug(usr)
-                    prj = session.query(models.Project).filter_by(id=usr.project_id).first()
-                    message += f'Benutzer {usr.username} wurde aus {prj.name} entfernt.\n'
-                    usr.project_id = None
-            session.commit()
-            await ctx.send(message)
-
-
-@project.command(name="info")
-async def info_project(ctx, proj: str):
-    """Git Detailinformationen über ein spezielles Projekt."""
-    with Session(engine) as session:
-        prj = session.query(models.Project).filter_by(name=proj).first()
-        message = f'**Projektname:** {prj.name}\n\n' \
-                  f'**Projektbeschreibung:**\n{prj.description}\n\n**Mitglieder:**\n'
-        for user in session.query(models.User).filter_by(project_id=prj.id):
-            message += f'{user.username}\n'
-        await ctx.send(message)
+        await ctx.send(embed=message, file=image)
+        pathlib.Path("ping.png").unlink()
+    else:
+        await ctx.send(embed=message)
 
 
 if __name__ == '__main__':
