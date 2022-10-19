@@ -10,7 +10,7 @@ class Project(Base):
     description = Column(String, nullable=True)
     leader = Column(Integer)
 
-    repository = relationship("Repo")
+    # repository = relationship("Repo")
     users = relationship("User")
 
     def __init__(self, name: str, description: str):
