@@ -1,6 +1,8 @@
 import colorsys
+import datetime
 import os
 import sys
+from typing import List
 
 import aiohttp.client_exceptions
 import discord
@@ -15,6 +17,8 @@ import pathlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from loguru import logger
+import matplotlib.pyplot as plt
+from prometheus_client import start_http_server, Gauge
 
 import models
 
@@ -37,9 +41,11 @@ class InterceptHandler(logging.Handler):
 
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
+logging.basicConfig(level=logging.DEBUG)
 
 load_env(read_file(pathlib.Path("../.env")))
-logging.basicConfig(level=logging.DEBUG)
+
+plt.style.use("dark_background")
 
 intents = discord.Intents.default()
 intents.members = True
@@ -50,8 +56,11 @@ client.load_extension('cogs.project')
 engine = create_engine('sqlite:///../db.sqlite3')
 models.base.setup(engine)
 
-ping_stats = []
+ping_stats: List[dict] = []
 ping_timeout = 0
+
+LATENCY = Gauge('bot_latency_gauge', 'The latency reported by pycord')
+COMMAND_EXECUTION_TIME_PING = Gauge('command_execution_time_ping', 'The time that the ping command takes to execute')
 
 
 @client.event
@@ -66,10 +75,10 @@ async def on_ready():
                 # print(user.__dir__())
                 if user.name == 'Club-Digital':
                     continue
-                instance = session.query(models.user.User).filter_by(username=user.name).first()
+                instance = session.query(models.User).filter_by(username=user.name).first()
                 if not instance:
                     logger.info(f'Enlisted {user.name}#{user.id} into user database.')
-                    session.add(models.user.User(user.name, user.id))
+                    session.add(models.User(user.name, user.id))
             session.commit()
     logging.info("Started Ping collection")
     collect_ping_metric.start()
@@ -91,14 +100,17 @@ async def collect_ping_metric():
     global ping_timeout
     latency = round(client.latency * 1000, 3)
     if len(ping_stats) < 1:
-        ping_stats.append(latency)
+        ping_stats.append({'value': latency, 'timestamp': datetime.datetime.now()})
+        LATENCY.set(client.latency)
         ping_timeout = 0
-    elif ping_stats[-1] != latency:
-        ping_stats.append(latency)
+    elif ping_stats[-1]["value"] != latency:
+        ping_stats.append({'value': latency, 'timestamp': datetime.datetime.now()})
+        LATENCY.set(client.latency)
     else:
         ping_timeout += 1
     if ping_timeout == 42:
-        ping_stats.append(latency)
+        ping_stats.append({'value': latency, 'timestamp': datetime.datetime.now()})
+        LATENCY.set(client.latency)
         ping_timeout = 0
     while len(ping_stats) > 100:
         ping_stats.pop(0)
@@ -112,19 +124,20 @@ async def ping(ctx):
     hue = max(0, 120 - (ping_int // 5))
     color = int("".join([f'{hex(int(i * 255))[2:]:02}' for i in colorsys.hsv_to_rgb(hue / 360, 1, 1)]), 16)
 
-    ts = pandas.Series(ping_stats, index=range(len(ping_stats)))
+    ts = pandas.DataFrame(ping_stats)
+    ts.set_index('timestamp', inplace=True)
 
     message = discord.Embed(title='Pong', color=color)
     message.add_field(name="Latenz", value=f'{ping} ms')
-    message.add_field(name="Mittelwert", value=f'{round(ts.median(), 3)} ms')
-    message.add_field(name="Maximum", value=f'{round(ts.max(), 1)} ms')
-    message.add_field(name="Minimum", value=f'{round(ts.min(), 1)} ms')
+    message.add_field(name="Minimum", value=f'{round(ts.min()["value"], 1)} ms')
+    message.add_field(name="Mittelwert", value=f'{round(ts.median()["value"], 3)} ms')
+    message.add_field(name="Maximum", value=f'{round(ts.max()["value"], 1)} ms')
 
     if len(ping_stats) > 1:
         logger.debug(ts)
         ts.cumsum()
 
-        plot = ts.plot()
+        plot = ts.plot(legend=False)
 
         fig = plot.get_figure()
         fig.savefig("ping.png", dpi=100, transparent=False)
@@ -146,6 +159,7 @@ if __name__ == '__main__':
     logger.info(f'    SQLAlchemy {sqlalchemy.__version__}')
     logger.info(f'    dotenvy {dotenvy.__version__}')
     logger.info(f'Let me join: {os.environ.get("JOIN_LINK")}')
+    start_http_server(8810)
     try:
         client.run(os.environ.get("TOKEN"))
     except aiohttp.client_exceptions.ClientConnectionError as e:
