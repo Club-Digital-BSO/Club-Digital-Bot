@@ -18,7 +18,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from loguru import logger
 import matplotlib.pyplot as plt
-from prometheus_client import start_http_server, Gauge
+from prometheus_client import start_http_server, Gauge, Enum
 
 import models
 
@@ -60,7 +60,10 @@ ping_stats: List[dict] = []
 ping_timeout = 0
 
 LATENCY = Gauge('bot_latency_gauge', 'The latency reported by pycord')
+ONLINE_STATE = Enum('bot_online_state', 'Is the Bot online', states=['starting', 'online', 'offline', 'stopping', 'stopped'])
 COMMAND_EXECUTION_TIME_PING = Gauge('command_execution_time_ping', 'The time that the ping command takes to execute')
+
+ONLINE_STATE.state('starting')
 
 
 @client.event
@@ -82,16 +85,19 @@ async def on_ready():
             session.commit()
     logging.info("Started Ping collection")
     collect_ping_metric.start()
+    ONLINE_STATE.state('online')
 
 
 @client.event
 async def on_disconnect():
     logger.error('Bot disconnected unexpectedly.')
+    ONLINE_STATE.state('offline')
 
 
 @client.event
 async def on_resumed():
     logger.info('Bot resumed normal operation')
+    ONLINE_STATE.state('online')
 
 
 # update interval: 42 seconds
@@ -159,9 +165,10 @@ if __name__ == '__main__':
     logger.info(f'    SQLAlchemy {sqlalchemy.__version__}')
     logger.info(f'    dotenvy {dotenvy.__version__}')
     logger.info(f'Let me join: {os.environ.get("JOIN_LINK")}')
-    start_http_server(8810)
+    start_http_server(9910)
     try:
         client.run(os.environ.get("TOKEN"))
+        ONLINE_STATE.state('stopped')
     except aiohttp.client_exceptions.ClientConnectionError as e:
         logger.error(f'Cound not connect to {e.host}:{e.port} {e.ssl} - {e.os_error}')
     except aiohttp.client_exceptions.ClientConnectorError:
