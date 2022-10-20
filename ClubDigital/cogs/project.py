@@ -3,7 +3,7 @@ import sys
 
 import discord
 import typing
-from discord.ext import commands
+from discord.ext import commands, pages
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -70,10 +70,11 @@ class Project(commands.Cog):
         """Listet alle bekannten Projekte auf."""
         with ctx.typing():
             data = self.session.query(models.Project).all()
-            message = "**Projects**\n"
-            for project in data:
-                message += f'*{project.name}:* {project.description}\n'
-            await ctx.send(message)
+            if len(data) <= 10:
+                message = "**Projects**\n"
+                for project in data:
+                    message += f'*{project.name}:*\n{project.description}\n\n'
+                await ctx.send(message)
 
     @project.command(name="add")
     async def add(self, ctx, name: str, description: str):
