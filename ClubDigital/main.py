@@ -1,7 +1,6 @@
 import colorsys
 import os
 import sys
-import typing
 
 import aiohttp.client_exceptions
 import discord
@@ -52,6 +51,7 @@ engine = create_engine('sqlite:///../db.sqlite3')
 models.base.setup(engine)
 
 ping_stats = []
+ping_timeout = 0
 
 
 @client.event
@@ -86,10 +86,21 @@ async def on_resumed():
 
 
 # update interval: 42 seconds
-@tasks.loop(seconds=42)
+@tasks.loop(seconds=1)
 async def collect_ping_metric():
-    ping_stats.append(round(client.latency * 1000, 3))
-    while len(ping_stats) > 10:
+    global ping_timeout
+    latency = round(client.latency * 1000, 3)
+    if len(ping_stats) < 1:
+        ping_stats.append(latency)
+        ping_timeout = 0
+    elif ping_stats[-1] != latency:
+        ping_stats.append(latency)
+    else:
+        ping_timeout += 1
+    if ping_timeout == 42:
+        ping_stats.append(latency)
+        ping_timeout = 0
+    while len(ping_stats) > 100:
         ping_stats.pop(0)
 
 
@@ -106,6 +117,8 @@ async def ping(ctx):
     message = discord.Embed(title='Pong', color=color)
     message.add_field(name="Latenz", value=f'{ping} ms')
     message.add_field(name="Mittelwert", value=f'{round(ts.median(), 3)} ms')
+    message.add_field(name="Maximum", value=f'{round(ts.max(), 1)} ms')
+    message.add_field(name="Minimum", value=f'{round(ts.min(), 1)} ms')
 
     if len(ping_stats) > 1:
         logger.debug(ts)
@@ -123,7 +136,7 @@ async def ping(ctx):
         await ctx.send(embed=message, file=image)
         pathlib.Path("ping.png").unlink()
     else:
-        await ctx.send(embed=message)
+        await ctx.send(f'{ping} ms', embed=message)
 
 
 if __name__ == '__main__':
