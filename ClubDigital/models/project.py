@@ -23,8 +23,10 @@ class Repo(Base):
     __tablename__ = "repos"
     id = Column(Integer, primary_key=True)
     project = Column(ForeignKey("projects.id"))
+    label = Column(String, nullable=False)
     link = Column(String, nullable=False)
 
-    def __init__(self, project, link):
+    def __init__(self, project, label, link):
         self.project = project
         self.link = link
+        self.label = label
