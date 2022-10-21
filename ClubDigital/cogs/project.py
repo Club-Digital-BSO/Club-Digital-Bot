@@ -158,12 +158,57 @@ class Project(commands.Cog):
             message += f'{user.username}\n'
         await ctx.send(message)
 
-    @project.command(name='set')
-    async def set(self, ctx, project: str, key: ProjectSettings, value: str):
+    @project.group()
+    async def repo(self, ctx):
+        pass
+
+    @repo.command(name="add")
+    async def repo_add(self, ctx, project: str, label: str, link: str):
         prj = self.session.query(models.Project).filter_by(name=project).first()
-        if key == ProjectSettings.ADD_REPO:
-            self.session.add(models.Repo(prj.id, value))
+        if not prj:
+            await ctx.send("Dieses Projekt existiert nicht!\n"
+                     "Bitte stelle sicher, dass du dich nicht vertippt hast.")
+            return
+        repo = self.session.query(models.Repo).filter_by(label=label, project=prj.id).first()
+        if repo:
+            await ctx.send("Dieses Repo existiert bereits und kann nicht mehr hinzugefügt werden!\n"
+                     f"Bitte verwende `!project repo modify {project} {label} {link}`!")
+            return
+        self.session.add(models.Repo(prj.id, label, link))
         self.session.commit()
+        await   ctx.send(f"{label} wurde erfolgreich zum Projekt \"{project}\" hinzugefügt.")
+
+    @repo.command(name="rm")
+    async def repo_remove(self, ctx, project:str, label: str):
+        prj = self.session.query(models.Project).filter_by(name=project).first()
+        if not prj:
+            await ctx.send("Dieses Projekt existiert nicht!\n"
+                     "Bitte stelle sicher, dass du dich nicht vertippt hast.")
+            return
+        repo = self.session.query(models.Repo).filter_by(label=label, project=prj.id).first()
+        if not repo:
+            await ctx.send(f"Das Repository {label} wurde nicht gefunden!\n"
+                     f"Bitte stelle sicher, dass du dich nicht vertippt hast.")
+            return
+        self.session.delete(repo)
+        self.session.commit()
+        await ctx.send(f'Das Repository {label} wurde entfernt.')
+
+    @repo.command(name="modify")
+    async def repo_modify(self, ctx, project: str, label: str, link: str):
+        prj = self.session.query(models.Project).filter_by(name=project).first()
+        if not prj:
+            await ctx.send("Dieses Projekt existiert nicht!\n"
+                     "Bitte stelle sicher, dass du dich nicht vertippt hast.")
+            return
+        repo = self.session.query(models.Repo).filter_by(label=label, project=prj.id).first()
+        if not repo:
+            await ctx.send(f"Das Repository {label} wurde nicht gefunden!\n"
+                     f"Bitte stelle sicher, dass du dich nicht vertippt hast.")
+            return
+        repo.link = link
+        self.session.commit()
+        await ctx.send(f"Das Repository {label} wurde erfolgreich aktualisiert.")
 
 
 def setup(bot: discord.Bot):
