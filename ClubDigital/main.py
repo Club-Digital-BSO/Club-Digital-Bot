@@ -1,24 +1,19 @@
-import colorsys
-import datetime
+import logging
 import os
+import pathlib
 import sys
-from typing import List
 
 import aiohttp.client_exceptions
 import discord
-import logging
 import dotenvy
+import matplotlib.pyplot as plt
 import sqlalchemy
-import pandas
 from discord.ext import commands
-from discord.ext import tasks
 from dotenvy import load_env, read_file
-import pathlib
+from loguru import logger
+from prometheus_client import start_http_server, Gauge, Enum
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from loguru import logger
-import matplotlib.pyplot as plt
-from prometheus_client import start_http_server, Gauge, Enum
 
 import models
 
@@ -52,14 +47,11 @@ intents.members = True
 intents.message_content = True
 
 client = commands.Bot(command_prefix="!", intents=intents)
-client.load_extension('cogs.project')
+client.load_extensions('cogs.project', 'cogs.stats')
+
 engine = create_engine('sqlite:///../db.sqlite3')
 models.base.setup(engine)
 
-ping_stats: List[dict] = []
-ping_timeout = 0
-
-LATENCY = Gauge('bot_latency_gauge', 'The latency reported by pycord')
 ONLINE_STATE = Enum('bot_online_state', 'Is the Bot online', states=['starting', 'online', 'offline', 'stopping', 'stopped'])
 COMMAND_EXECUTION_TIME_PING = Gauge('command_execution_time_ping', 'The time that the ping command takes to execute')
 
@@ -83,8 +75,6 @@ async def on_ready():
                     logger.info(f'Enlisted {user.name}#{user.id} into user database.')
                     session.add(models.User(user.name, user.id))
             session.commit()
-    logging.info("Started Ping collection")
-    collect_ping_metric.start()
     ONLINE_STATE.state('online')
 
 
@@ -98,64 +88,6 @@ async def on_disconnect():
 async def on_resumed():
     logger.info('Bot resumed normal operation')
     ONLINE_STATE.state('online')
-
-
-# update interval: 42 seconds
-@tasks.loop(seconds=1)
-async def collect_ping_metric():
-    global ping_timeout
-    latency = round(client.latency * 1000, 3)
-    if len(ping_stats) < 1:
-        ping_stats.append({'value': latency, 'timestamp': datetime.datetime.now()})
-        LATENCY.set(client.latency)
-        ping_timeout = 0
-    elif ping_stats[-1]["value"] != latency:
-        ping_stats.append({'value': latency, 'timestamp': datetime.datetime.now()})
-        LATENCY.set(client.latency)
-    else:
-        ping_timeout += 1
-    if ping_timeout == 42:
-        ping_stats.append({'value': latency, 'timestamp': datetime.datetime.now()})
-        LATENCY.set(client.latency)
-        ping_timeout = 0
-    while len(ping_stats) > 100:
-        ping_stats.pop(0)
-
-
-@client.command()
-async def ping(ctx):
-    """Zeigt die aktuelle Latenz des Bots zusammen mit ein paar verwandten Statistiken an."""
-    ping = round(ctx.bot.latency * 1000, 1)
-    ping_int = int(ping)
-    hue = max(0, 120 - (ping_int // 5))
-    color = int("".join([f'{hex(int(i * 255))[2:]:02}' for i in colorsys.hsv_to_rgb(hue / 360, 1, 1)]), 16)
-
-    ts = pandas.DataFrame(ping_stats)
-    ts.set_index('timestamp', inplace=True)
-
-    message = discord.Embed(title='Pong', color=color)
-    message.add_field(name="Latenz", value=f'{ping} ms')
-    message.add_field(name="Minimum", value=f'{round(ts.min()["value"], 1)} ms')
-    message.add_field(name="Mittelwert", value=f'{round(ts.median()["value"], 3)} ms')
-    message.add_field(name="Maximum", value=f'{round(ts.max()["value"], 1)} ms')
-
-    if len(ping_stats) > 1:
-        logger.debug(ts)
-        ts.cumsum()
-
-        plot = ts.plot(legend=False)
-
-        fig = plot.get_figure()
-        fig.savefig("ping.png", dpi=100, transparent=False)
-        fig.clf()
-
-        image = discord.File("ping.png", filename="ping.png")
-        message.set_image(url='attachment://ping.png')
-
-        await ctx.send(embed=message, file=image)
-        pathlib.Path("ping.png").unlink()
-    else:
-        await ctx.send(f'{ping} ms', embed=message)
 
 
 if __name__ == '__main__':
