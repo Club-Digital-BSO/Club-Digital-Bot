@@ -1,5 +1,6 @@
 import logging
 import sys
+from enum import Enum
 
 import discord
 import typing
@@ -9,6 +10,10 @@ from sqlalchemy.orm import Session
 
 from ClubDigital import models
 from loguru import logger
+
+
+class ProjectSettings(Enum):
+    ADD_REPO = "add_repo"
 
 
 class InterceptHandler(logging.Handler):
@@ -141,12 +146,24 @@ class Project(commands.Cog):
     @project.command(name="info")
     async def info(self, ctx, proj: str):
         """Git Detailinformationen über ein spezielles Projekt."""
-        prj = self.session.query(models.Project).filter_by(name=proj).first()
-        message = f'**Projektname:** {prj.name}\n\n' \
-                  f'**Projektbeschreibung:**\n{prj.description}\n\n**Mitglieder:**\n'
+        prj: models.Project = self.session.query(models.Project).filter_by(name=proj).first()
+        message = f'**Projektname:** {prj.name}\n\n'
+        if len(prj.repository) > 0:
+            message += f"**Repository{'s' if len(prj.repository) > 1 else ''}:**\n"
+            for repo in prj.repository:
+                message += f'http://{repo.link}\n'
+            message += '\n'
+        message += f'**Projektbeschreibung:**\n{prj.description}\n\n**Mitglieder:**\n'
         for user in self.session.query(models.User).filter_by(project_id=prj.id):
             message += f'{user.username}\n'
         await ctx.send(message)
+
+    @project.command(name='set')
+    async def set(self, ctx, project: str, key: ProjectSettings, value: str):
+        prj = self.session.query(models.Project).filter_by(name=project).first()
+        if key == ProjectSettings.ADD_REPO:
+            self.session.add(models.Repo(prj.id, value))
+        self.session.commit()
 
 
 def setup(bot: discord.Bot):
