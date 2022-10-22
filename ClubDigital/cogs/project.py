@@ -1,17 +1,15 @@
 import logging
 import sys
-from enum import Enum
+import typing
 
 import discord
-import typing
-from discord.ext import commands, pages
+from discord.ext import commands
+from loguru import logger
 from prometheus_client import Gauge
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from ClubDigital import models
-from loguru import logger
-
 
 DATABASE_CONNECTED = Gauge('bot_project_cog_database_connected', "State of database connection for the project cog")
 
@@ -82,7 +80,7 @@ class Project(commands.Cog):
         """Verwaltet die Projekte der AG."""
         pass
 
-    @project.command(name="list")
+    @project.command(name="ls")
     async def list(self, ctx):
         """Listet alle bekannten Projekte auf."""
         with ctx.typing():
@@ -91,13 +89,13 @@ class Project(commands.Cog):
                 message = "Projektliste:"
                 embeds = []
                 for project in data:
-                    embed = discord.Embed(title=project.name, description=project.description, color=project.color)
+                    embed = discord.Embed(title=project.name, description=project.description, color=int(project.color, 16))
                     if len(project.repository) > 0:
                         embed.add_field(name=f"Repository{'s' if len(project.repository) > 1 else ''}",
                                         value='\n'.join([f'{i.label}: http://{i.link}' for i in project.repository]))
                     if len(project.users) > 0:
                         embed.add_field(name=f'Mitglied{"er" if len(project.users) > 1 else ""}',
-                                        value='\n'.join([i.name for i in project.users]))
+                                        value='\n'.join([i.username for i in project.users]))
                     if project.leader:
                         leader: models.User = self.session.query(models.User).filter_by(id=project.leader)
                         embed.add_field(name="Leiter", value=leader.username)
@@ -157,18 +155,23 @@ class Project(commands.Cog):
             for user in users:
                 usr: models.User = self.session.query(models.User).filter_by(dc_id=user.id).first()
                 proj: models.Project = self.session.query(models.Project).filter_by(name=prj).first()
-                if all([usr, proj]):
-                    if usr.project_id is None:
-                        message += f'Benutzer {usr.username} zu {prj} hinzugefügt.\n'
-                    else:
-                        old = self.session.query(models.Project).filter_by(id=usr.project_id).first()
-                        message += f'Benutzer {usr.username} wurde von {old.name} zu {proj.name} verschoben.\n'
-                        if old.role in user.roles:
-                            await user.remove_roles(old.role)
-                        if old.leader_role in user.roles:
-                            await user.remove_roles(old.leader_role)
-                    usr.project_id = proj.id
-                    await user.add_roles(ctx.guild.get_role(proj.role))
+                if not usr:
+                    message += f'Der Benutzer {user.name} ist nicht in der Datenbank verzeichnet!'
+                    return
+                if not proj:
+                    message += f'Das Projekt {prj} existiert nicht!'
+                    return
+                if usr.project_id is None:
+                    message += f'Benutzer {usr.username} zu {prj} hinzugefügt.\n'
+                else:
+                    old = self.session.query(models.Project).filter_by(id=usr.project_id).first()
+                    message += f'Benutzer {usr.username} wurde von {old.name} zu {proj.name} verschoben.\n'
+                    if old.role in user.roles:
+                        await user.remove_roles(old.role)
+                    if old.leader_role in user.roles:
+                        await user.remove_roles(old.leader_role)
+                usr.project_id = proj.id
+                await user.add_roles(ctx.guild.get_role(proj.role))
             self.session.commit()
             await ctx.send(message)
 
