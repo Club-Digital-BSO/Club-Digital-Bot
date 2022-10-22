@@ -11,6 +11,7 @@ class Project(Base):
     leader = Column(Integer)
     role = Column(Integer, nullable=False, unique=True, default=0)
     leader_role = Column(Integer, nullable=False, unique=True, default=0)
+    color = Column(String, default="10ff10")
 
     repository = relationship("Repo")
     users = relationship("User")
