@@ -11,6 +11,7 @@ from loguru import logger
 
 LATENCY = Gauge('bot_latency_gauge', 'The latency reported by pycord')
 
+
 class Stats(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -20,7 +21,8 @@ class Stats(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         logger.info("Started Ping collection")
-        self.collect_ping_metric.start()
+        if not self.collect_ping_metric.is_running():
+            self.collect_ping_metric.start()
 
     # update interval: 42 seconds
     @tasks.loop(seconds=1)
