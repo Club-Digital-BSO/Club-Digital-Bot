@@ -87,11 +87,17 @@ class Project(commands.Cog):
         with ctx.typing():
             instance = self.session.query(models.project.Project).filter_by(name=name).first()
             if not instance:
-                self.session.add(models.project.Project(name, description))
+                role = await ctx.guild.create_role(name=name, hoist=True, mentionable=True,
+                                            reason="Project was created, so the fitting role has to be created too.")
+                lr = await ctx.guild.create_role(name=f'{name}-Lead', mentionable=True,
+                                            reason="A project needs a leader, so it needs to be created.")
+
+                self.session.add(models.project.Project(name, description, role.id, lr.id))
                 self.session.commit()
                 await ctx.send(f'Added a project called "{name}".')
             else:
                 await ctx.send(f'This Project already exists!')
+            logger.info("Creating roles")
 
     @project.command(name="rm")
     async def delete(self, ctx, name: str):
@@ -99,6 +105,16 @@ class Project(commands.Cog):
         with ctx.typing():
             instance = self.session.query(models.Project).filter_by(name=name).first()
             if instance:
+                prj_role = ctx.guild.get_role(instance.role)
+                if not prj_role:
+                    logger.info(f"Project role for {instance.name} was already absent.")
+                else:
+                    await prj_role.delete(reason="This is no longer needed.")
+                prl_role = ctx.guild.get_role(instance.leader_role)
+                if not prl_role:
+                    logger.info(f'Project-Leader role for {instance.name} was already absent.')
+                else:
+                    await prl_role.delete(reason="This is no longer needed.")
                 self.session.delete(instance)
                 self.session.commit()
                 await ctx.send(f'Projekt "{instance.name}" wurde entfernt.')
@@ -116,15 +132,20 @@ class Project(commands.Cog):
 
         with ctx.typing():
             for user in users:
-                usr = self.session.query(models.User).filter_by(dc_id=user.id).first()
-                proj = self.session.query(models.Project).filter_by(name=prj).first()
+                usr: models.User = self.session.query(models.User).filter_by(dc_id=user.id).first()
+                proj: models.Project = self.session.query(models.Project).filter_by(name=prj).first()
                 if all([usr, proj]):
                     if usr.project_id is None:
                         message += f'Benutzer {usr.username} zu {prj} hinzugefügt.\n'
                     else:
                         old = self.session.query(models.Project).filter_by(id=usr.project_id).first()
                         message += f'Benutzer {usr.username} wurde von {old.name} zu {proj.name} verschoben.\n'
+                        if old.role in user.roles:
+                            await user.remove_roles(old.role)
+                        if old.leader_role in user.roles:
+                            await user.remove_roles(old.leader_role)
                     usr.project_id = proj.id
+                    await user.add_roles(ctx.guild.get_role(proj.role))
             self.session.commit()
             await ctx.send(message)
 
@@ -133,6 +154,9 @@ class Project(commands.Cog):
         """Entfernt Benutzer aus einem Projekt."""
         with ctx.typing():
             message = ""
+            users = list(users)
+            if len(users) == 0:
+                users.append(ctx.message.author)
             for user in users:
                 usr = self.session.query(models.User).filter_by(dc_id=user.id).first()
                 if usr:
@@ -140,6 +164,10 @@ class Project(commands.Cog):
                     prj = self.session.query(models.Project).filter_by(id=usr.project_id).first()
                     message += f'Benutzer {usr.username} wurde aus {prj.name} entfernt.\n'
                     usr.project_id = None
+                    if prj.role in user.roles:
+                        await user.remove_roles(prj.role)
+                    if prj.leader_role in user.roles:
+                        await user.remove_roles(prj.leader_role)
             self.session.commit()
             await ctx.send(message)
 
@@ -176,7 +204,7 @@ class Project(commands.Cog):
             return
         self.session.add(models.Repo(prj.id, label, link))
         self.session.commit()
-        await   ctx.send(f"{label} wurde erfolgreich zum Projekt \"{project}\" hinzugefügt.")
+        await ctx.send(f"{label} wurde erfolgreich zum Projekt \"{project}\" hinzugefügt.")
 
     @repo.command(name="rm")
     async def repo_remove(self, ctx, project:str, label: str):
