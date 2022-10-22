@@ -9,14 +9,18 @@ class Project(Base):
     name = Column(String, nullable=False, unique=True)
     description = Column(String, nullable=True)
     leader = Column(Integer)
+    role = Column(Integer, nullable=False, unique=True, default=0)
+    leader_role = Column(Integer, nullable=False, unique=True, default=0)
 
     repository = relationship("Repo")
     users = relationship("User")
 
-    def __init__(self, name: str, description: str):
+    def __init__(self, name: str, description: str, role: int, lr: int):
         super(Project, self).__init__()
         self.name = name
         self.description = description
+        self.role = role
+        self.leader_role = lr
 
 
 class Repo(Base):
