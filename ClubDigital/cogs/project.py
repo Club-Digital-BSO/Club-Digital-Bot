@@ -5,6 +5,7 @@ from enum import Enum
 import discord
 import typing
 from discord.ext import commands, pages
+from prometheus_client import Gauge
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -12,8 +13,7 @@ from ClubDigital import models
 from loguru import logger
 
 
-class ProjectSettings(Enum):
-    ADD_REPO = "add_repo"
+DATABASE_CONNECTED = Gauge('bot_project_cog_database_connected', "State of database connection for the project cog")
 
 
 class InterceptHandler(logging.Handler):
@@ -44,6 +44,7 @@ class Project(commands.Cog):
         self.bot = bot
         self.engine = create_engine('sqlite:///../db.sqlite3')
         self.session = Session(self.engine)
+        DATABASE_CONNECTED.set(1)
 
     @commands.Cog.listener()
     async def on_member_joined(self, member):
@@ -58,12 +59,23 @@ class Project(commands.Cog):
         if self.session.is_active:
             self.session.close()
             logger.info("Closing the database connection for Project cog.")
+            DATABASE_CONNECTED.set(0)
 
     @commands.Cog.listener()
     async def on_connect(self):
+        logger.debug("Project cog connect listener.")
         if not self.session.is_active:
             self.session = Session(self.engine)
             logger.info("Opening a new database connection for Project cog.")
+            DATABASE_CONNECTED.set(1)
+
+    @commands.Cog.listener()
+    async def on_resumed(self):
+        logger.debug("Project cog resumed listener.")
+        if not self.session.is_active:
+            self.session = Session(self.engine)
+            logger.info("Opening a new database connection for Project cog.")
+            DATABASE_CONNECTED.set(1)
 
     @commands.group()
     async def project(self, ctx):
@@ -76,10 +88,21 @@ class Project(commands.Cog):
         with ctx.typing():
             data = self.session.query(models.Project).all()
             if len(data) <= 10:
-                message = "**Projects**\n"
+                message = "Projektliste:"
+                embeds = []
                 for project in data:
-                    message += f'*{project.name}:*\n{project.description}\n\n'
-                await ctx.send(message)
+                    embed = discord.Embed(title=project.name, description=project.description, color=project.color)
+                    if len(project.repository) > 0:
+                        embed.add_field(name=f"Repository{'s' if len(project.repository) > 1 else ''}",
+                                        value='\n'.join([f'{i.label}: http://{i.link}' for i in project.repository]))
+                    if len(project.users) > 0:
+                        embed.add_field(name=f'Mitglied{"er" if len(project.users) > 1 else ""}',
+                                        value='\n'.join([i.name for i in project.users]))
+                    if project.leader:
+                        leader: models.User = self.session.query(models.User).filter_by(id=project.leader)
+                        embed.add_field(name="Leiter", value=leader.username)
+                    embeds.append(embed)
+                await ctx.send(message, embeds=embeds)
 
     @project.command(name="add")
     async def add(self, ctx, name: str, description: str):
