@@ -54,6 +54,7 @@ models.base.setup(engine)
 
 ONLINE_STATE = Enum('bot_online_state', 'Is the Bot online', states=['starting', 'online', 'offline', 'stopping', 'stopped'])
 COMMAND_EXECUTION_TIME_PING = Gauge('command_execution_time_ping', 'The time that the ping command takes to execute')
+DATABASE_CONNECTED = Gauge('bot_main_database_connected', 'Databse connection status for the main bot.')
 
 ONLINE_STATE.state('starting')
 
@@ -63,6 +64,7 @@ async def on_ready():
     logging.info(f'Logged in as: {client.user}')
     logging.info('Joined to:')
     with Session(engine) as session:
+        DATABASE_CONNECTED.set(1)
         for guild in client.guilds:
             logging.info(f'    {guild.name} - {guild.id}')
             for user in guild.members:
@@ -75,6 +77,7 @@ async def on_ready():
                     logger.info(f'Enlisted {user.name}#{user.id} into user database.')
                     session.add(models.User(user.name, user.id))
             session.commit()
+        DATABASE_CONNECTED.set(0)
     ONLINE_STATE.state('online')
 
 
