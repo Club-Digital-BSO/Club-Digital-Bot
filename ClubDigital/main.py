@@ -15,6 +15,7 @@ from loguru import logger
 from prometheus_client import start_http_server, Gauge
 
 from bot import ProjektBot, ONLINE_STATE
+import cogs
 
 
 class InterceptHandler(logging.Handler):
@@ -47,7 +48,7 @@ intents.message_content = True
 
 
 bot = ProjektBot(command_prefix=commands.when_mentioned_or("!"), intents=intents)
-bot.load_extensions('cogs.project', 'cogs.stats', 'cogs.test')
+bot.load_extensions(*[f'cogs.{item.stem}' for item in pathlib.Path(cogs.__file__).parent.iterdir() if item.is_file() and not item.stem.startswith("__")])
 
 
 COMMAND_EXECUTION_TIME_PING = Gauge('command_execution_time_ping', 'The time that the ping command takes to execute')
