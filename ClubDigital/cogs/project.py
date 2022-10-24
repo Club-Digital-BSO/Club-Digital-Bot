@@ -43,6 +43,7 @@ class Project(commands.Cog):
         self.engine = create_engine('sqlite:///../db.sqlite3')
         self.session = Session(self.engine)
         DATABASE_CONNECTED.set(1)
+        logger.info('Cog: "Project" has been initialized.')
 
     @commands.Cog.listener()
     async def on_member_joined(self, member):
@@ -266,4 +267,6 @@ class Project(commands.Cog):
 
 
 def setup(bot: discord.Bot):
-    bot.add_cog(Project(bot))
+    for cog in [Project]:
+        logger.info(f'Registering {cog.__name__} ...')
+        bot.add_cog(cog(bot))

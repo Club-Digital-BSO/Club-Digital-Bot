@@ -17,6 +17,7 @@ class Stats(commands.Cog):
         self.bot = bot
         self.ping_stats: List[dict] = []
         self.ping_timeout = 0
+        logger.info('Cog "Stats" has been initialized.')
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -81,4 +82,6 @@ class Stats(commands.Cog):
 
 
 def setup(bot):
-    bot.add_cog(Stats(bot))
+    for cog in [Stats]:
+        logger.info(f'Registering {cog.__name__} ...')
+        bot.add_cog(cog(bot))
