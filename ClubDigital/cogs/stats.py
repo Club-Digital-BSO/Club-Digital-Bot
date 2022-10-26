@@ -9,6 +9,8 @@ from discord.ext import commands, tasks
 from prometheus_client import Gauge
 from loguru import logger
 
+from ClubDigital.metrics import PROCESS_TIME
+
 LATENCY = Gauge('bot_latency_gauge', 'The latency reported by pycord')
 
 
@@ -48,37 +50,42 @@ class Stats(commands.Cog):
     @commands.command()
     async def ping(self, ctx):
         """Zeigt die aktuelle Latenz des Bots zusammen mit ein paar verwandten Statistiken an."""
-        ping = round(ctx.bot.latency * 1000, 1)
-        ping_int = int(ping)
-        hue = max(0, 120 - (ping_int // 5))
-        color = int("".join([f'{hex(int(i * 255))[2:]:02}' for i in colorsys.hsv_to_rgb(hue / 360, 1, 1)]), 16)
+        with PROCESS_TIME.time():
+            ping = round(ctx.bot.latency * 1000, 1)
+            ping_int = int(ping)
+            hue = max(0, 120 - (ping_int // 5))
+            color = int("".join([f'{hex(int(i * 255))[2:]:02}' for i in colorsys.hsv_to_rgb(hue / 360, 1, 1)]), 16)
 
-        ts = pandas.DataFrame(self.ping_stats)
-        ts.set_index('timestamp', inplace=True)
+            ts = pandas.DataFrame(self.ping_stats)
+            ts.set_index('timestamp', inplace=True)
 
-        message = discord.Embed(title='Pong', color=color)
-        message.add_field(name="Latenz", value=f'{ping} ms')
-        message.add_field(name="Minimum", value=f'{round(ts.min()["value"], 1)} ms')
-        message.add_field(name="Mittelwert", value=f'{round(ts.median()["value"], 3)} ms')
-        message.add_field(name="Maximum", value=f'{round(ts.max()["value"], 1)} ms')
+            message = discord.Embed(title='Pong', color=color)
+            message.add_field(name="Latenz", value=f'{ping} ms')
+            message.add_field(name="Minimum", value=f'{round(ts.min()["value"], 1)} ms')
+            message.add_field(name="Mittelwert", value=f'{round(ts.median()["value"], 3)} ms')
+            message.add_field(name="Maximum", value=f'{round(ts.max()["value"], 1)} ms')
 
-        if len(self.ping_stats) > 1:
-            logger.debug(ts)
-            ts.cumsum()
+            if len(self.ping_stats) > 1:
+                logger.debug(ts)
+                ts.cumsum()
 
-            plot = ts.plot(legend=False)
+                plot = ts.plot(legend=False)
 
-            fig = plot.get_figure()
-            fig.savefig("ping.png", dpi=100, transparent=False)
-            fig.clf()
+                fig = plot.get_figure()
+                fig.savefig("ping.png", dpi=100, transparent=False)
+                fig.clf()
 
-            image = discord.File("ping.png", filename="ping.png")
-            message.set_image(url='attachment://ping.png')
+                image = discord.File("ping.png", filename="ping.png")
+                message.set_image(url='attachment://ping.png')
 
-            await ctx.send(embed=message, file=image)
-            pathlib.Path("ping.png").unlink()
-        else:
-            await ctx.send(f'{ping} ms', embed=message)
+                await ctx.send(embed=message, file=image)
+                pathlib.Path("ping.png").unlink()
+            else:
+                await ctx.send(f'{ping} ms', embed=message)
+
+    # @commands.command()
+    # async def count(self, ctx):
+    #     ctx.send(f'Es wurden seit dem Letzten neustart {self.bot.}')
 
 
 def setup(bot):

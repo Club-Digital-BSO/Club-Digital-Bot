@@ -1,25 +1,37 @@
+import discord
 from discord import ApplicationCommand
 from discord.ext import commands
 from loguru import logger
-from prometheus_client import Enum, Gauge
+from prometheus_client import Enum, Gauge, Counter
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from ClubDigital import models
+from ClubDigital.metrics import ONLINE_STATE, DATABASE_CONNECTED, COMMAND_COUNT
 
 engine = create_engine('sqlite:///../db.sqlite3')
 models.base.setup(engine)
 
 
-ONLINE_STATE = Enum('bot_online_state', 'Is the Bot online', states=['starting', 'online', 'offline', 'stopping', 'stopped'])
 ONLINE_STATE.state('starting')
-DATABASE_CONNECTED = Gauge('bot_main_database_connected', 'Databse connection status for the main bot.')
+
+
+class MyContext(commands.Context):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.prj = None
+
+    async def project(self, value: models.Project):
+        self.prj = value
 
 
 class ProjektBot(commands.Bot):
     async def register_command(self, command: ApplicationCommand, force: bool = True,
                                guild_ids: list[int] | None = None) -> None:
         await super().register_command(command, force, guild_ids)
+
+    async def get_context(self, message: discord.Message, *, cls=MyContext):
+        return await super().get_context(message, cls=cls)
 
     async def on_ready(self):
         logger.info(f'Logged in as: {self.user}')
@@ -48,3 +60,6 @@ class ProjektBot(commands.Bot):
     async def on_resumed(self):
         logger.info('Bot resumed normal operation')
         ONLINE_STATE.state('online')
+
+    async def on_command(self, ctx):
+        COMMAND_COUNT.inc(1)

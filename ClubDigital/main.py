@@ -12,7 +12,7 @@ import sqlalchemy
 from discord.ext import commands
 from dotenvy import load_env, read_file
 from loguru import logger
-from prometheus_client import start_http_server, Gauge
+from prometheus_client import start_http_server, Gauge, Counter
 
 from bot import ProjektBot, ONLINE_STATE
 import cogs
@@ -53,6 +53,7 @@ bot.load_extensions(*[f'cogs.{item.stem}' for item in pathlib.Path(cogs.__file__
 
 COMMAND_EXECUTION_TIME_PING = Gauge('command_execution_time_ping', 'The time that the ping command takes to execute')
 START_TIME = Gauge('bot_start_time', 'The timestamp when the bot was last started')
+EXCEPTION_COUNT = Counter("bot_exception_count", "Numerof exceptions from the Bot.")
 
 
 if __name__ == '__main__':
@@ -63,9 +64,10 @@ if __name__ == '__main__':
     logger.info(f'    dotenvy {dotenvy.__version__}')
     logger.info(f'Let me join: {os.environ.get("JOIN_LINK")}')
     start_http_server(9910)
-    START_TIME.set(datetime.datetime.now().timestamp())
+    START_TIME.set_to_current_time()
     try:
-        bot.run(os.environ.get("TOKEN"))
-        ONLINE_STATE.state('stopped')
+        with EXCEPTION_COUNT.count_exceptions():
+            bot.run(os.environ.get("TOKEN"))
+            ONLINE_STATE.state('stopped')
     except aiohttp.client_exceptions.ClientConnectionError as e:
         logger.error(f'Cound not connect to {e.host}:{e.port} {e.ssl} - {e.os_error}')

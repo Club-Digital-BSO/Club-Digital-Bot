@@ -11,11 +11,14 @@ class Test(commands.Cog):
 
     @commands.group()
     async def test(self, ctx, param: Optional[str]):
-        logger.debug(param)
+        logger.debug(f'test ({param})')
+        logger.debug([i.name for i in self.test.walk_commands()])
+        if param in [i.name for i in self.test.walk_commands()]:
+            await self.test.get_command(param).invoke(ctx)
 
     @test.command()
-    async def eins(self, ctx, param: str):
-        logger.debug(param)
+    async def eins(self, ctx, param: Optional[str]):
+        logger.debug(f'test.eins ({param})')
 
 
 def setup(bot: discord.Bot):
