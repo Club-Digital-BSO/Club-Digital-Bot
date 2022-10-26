@@ -4,7 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["Stefan Schmelz <stefan_schmelz@gmx.net>"]
 readme = "README.md"
-packages = [{include = "discord_projektbot"}]
+packages = [{include = "ClubDigital"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
