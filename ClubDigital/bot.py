@@ -2,7 +2,6 @@ import discord
 from discord import ApplicationCommand
 from discord.ext import commands
 from loguru import logger
-from prometheus_client import Enum, Gauge, Counter
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
