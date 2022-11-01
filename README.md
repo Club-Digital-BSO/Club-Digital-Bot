@@ -13,7 +13,7 @@ Dieses Projekt wird von Schülern entwickelt.
 ## Bibliotheken
 
  - pycord
- - dotenvy
+ - pydantic
  - SQLAlchemy
  - loguru
 
